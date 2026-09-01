@@ -9,11 +9,11 @@ const router = express.Router();
 
 // Default tasks seeded for new users
 const DEFAULT_TASKS = [
-  { title: 'Fitness', subtitle: 'Workout or physical activity', categoryIcon: 'grid', priority: 'High', durationEstimate: 60, isDefault: true },
-  { title: 'Personality', subtitle: 'Self reflection or grooming', categoryIcon: 'prototype', priority: 'Medium', durationEstimate: 30, isDefault: true },
-  { title: 'Social Activities', subtitle: 'Connect with friends/family', categoryIcon: 'phone', priority: 'Medium', durationEstimate: 60, isDefault: true },
-  { title: 'Communication', subtitle: 'Improve speaking or writing', categoryIcon: 'flow', priority: 'Medium', durationEstimate: 45, isDefault: true },
-  { title: 'Learn new thing', subtitle: 'Read a book or take a course', categoryIcon: 'settings', priority: 'High', durationEstimate: 60, isDefault: true },
+  { title: 'Fitness', subtitle: 'Workout or physical activity', priority: 'High', durationEstimate: 60, isDefault: true },
+  { title: 'Personality', subtitle: 'Self reflection or grooming', priority: 'Medium', durationEstimate: 30, isDefault: true },
+  { title: 'Social Activities', subtitle: 'Connect with friends/family', priority: 'Medium', durationEstimate: 60, isDefault: true },
+  { title: 'Communication', subtitle: 'Improve speaking or writing', priority: 'Medium', durationEstimate: 45, isDefault: true },
+  { title: 'Learn new thing', subtitle: 'Read a book or take a course', priority: 'High', durationEstimate: 60, isDefault: true },
 ];
 
 // POST /auth/register

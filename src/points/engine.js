@@ -70,6 +70,7 @@ async function checkFiveTaskBonus(userId, date, progress) {
     userId,
     scheduledDate: { $gte: startOfDay, $lte: endOfDay },
     isBacklog: false,
+    isCompleted: true,
   });
 
   if (taskCount >= 5) {
