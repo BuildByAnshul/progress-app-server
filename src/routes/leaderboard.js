@@ -52,7 +52,8 @@ router.get('/', authMiddleware, async (req, res) => {
     const combined = [...weeklyAgg, ...zeroEntries];
 
     // Find max weekly points for progress bar normalization
-    const maxPoints = combined.length > 0 ? Math.max(...combined.map((e) => e.weeklyPoints), 1) : 1;
+    // Use a baseline of 50 points so a low score doesn't completely fill the bar for the #1 user.
+    const maxPoints = combined.length > 0 ? Math.max(...combined.map((e) => e.weeklyPoints), 50) : 50;
 
     const leaderboard = combined.map((entry, index) => {
       const userId = entry._id.toString();
