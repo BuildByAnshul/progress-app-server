@@ -54,4 +54,14 @@ router.get('/weekly', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /stats/history — returns all daily progress for the user
+router.get('/history', authMiddleware, async (req, res) => {
+  try {
+    const records = await DailyProgress.find({ userId: req.userId }).sort({ date: 1 });
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;
