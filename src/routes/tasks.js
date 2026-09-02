@@ -32,9 +32,38 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// Default tasks to seed daily
+const DEFAULT_TASKS = [
+  { title: 'Fitness', subtitle: 'Workout or physical activity', priority: 'High', durationEstimate: 60, isDefault: true },
+  { title: 'Personality', subtitle: 'Self reflection or grooming', priority: 'Medium', durationEstimate: 30, isDefault: true },
+  { title: 'Social Activities', subtitle: 'Connect with friends/family', priority: 'Medium', durationEstimate: 60, isDefault: true },
+  { title: 'Communication', subtitle: 'Improve speaking or writing', priority: 'Medium', durationEstimate: 45, isDefault: true },
+  { title: 'Learn new thing', subtitle: 'Read a book or take a course', priority: 'High', durationEstimate: 60, isDefault: true },
+];
+
 // GET /tasks/today
 router.get('/today', authMiddleware, async (req, res) => {
   try {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    // Check if default tasks exist for today
+    const existingDefaults = await Task.countDocuments({
+      userId: req.userId,
+      scheduledDate: dayRange(todayStr()),
+      isDefault: true,
+    });
+
+    // Seed default daily tasks if they are missing
+    if (existingDefaults === 0) {
+      const defaultTasksToInsert = DEFAULT_TASKS.map((t) => ({
+        ...t,
+        userId: req.userId,
+        scheduledDate: today,
+      }));
+      await Task.insertMany(defaultTasksToInsert);
+    }
+
     const tasks = await Task.find({
       userId: req.userId,
       scheduledDate: dayRange(todayStr()),
@@ -42,6 +71,7 @@ router.get('/today', authMiddleware, async (req, res) => {
     }).sort({ createdAt: 1 });
     res.json(tasks);
   } catch (err) {
+    console.error('Fetch today tasks error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
