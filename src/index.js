@@ -8,6 +8,8 @@ const userRoutes = require('./routes/users');
 const taskRoutes = require('./routes/tasks');
 const statsRoutes = require('./routes/stats');
 const leaderboardRoutes = require('./routes/leaderboard');
+const pointsRoutes = require('./routes/points');
+const notificationRoutes = require('./routes/notifications');
 const { startDailyResetJob } = require('./jobs/dailyReset');
 require('./services/firebase'); // Initialize Firebase
 
@@ -24,6 +26,7 @@ app.use('/users', userRoutes);
 app.use('/tasks', taskRoutes);
 app.use('/stats', statsRoutes);
 app.use('/leaderboard', leaderboardRoutes);
+app.use('/notifications', notificationRoutes);
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));

@@ -218,27 +218,35 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
     const progress = await awardTaskComplete(req.userId, task._id);
     await syncTasksTotal(req.userId);
 
-    // If it's a global task, notify others
-    if (task.isDefault) {
-      const currentUser = await User.findById(req.userId);
-      const otherUsers = await User.find({ _id: { $ne: req.userId } });
-      
-      const msgTitle = "Task Completed!";
-      const msgBody = `${currentUser.name} ne '${task.title}' task complete kar liya hai! 🎉`;
-      
-      const notifications = otherUsers.map(u => ({
-        userId: u._id,
-        title: msgTitle,
-        body: msgBody,
-        data: { taskId: task._id.toString() }
-      }));
-      await Notification.insertMany(notifications);
-
-      // Send Push Notifications via FCM
-      otherUsers.forEach(u => {
-        if (u.fcmToken) sendPushNotification(u.fcmToken, msgTitle, msgBody, { taskId: task._id.toString() });
-      });
+    // Notify others on ANY task completion
+    let isGlobalTask = false;
+    if (task.templateId) {
+      const tpl = await TaskTemplate.findById(task.templateId);
+      if (tpl && tpl.isGlobal) isGlobalTask = true;
+    } else if (task.isDefault) {
+      isGlobalTask = true; // Old predefined tasks
     }
+
+    const currentUser = await User.findById(req.userId);
+    const otherUsers = await User.find({ _id: { $ne: req.userId } });
+    
+    const msgTitle = "Task Completed!";
+    const msgBody = isGlobalTask 
+      ? `${currentUser.name} ne '${task.title}' task complete kar liya hai! 🎉`
+      : `${currentUser.name} ne apna ek task complete kar liya hai! 🎉`;
+    
+    const notifications = otherUsers.map(u => ({
+      userId: u._id,
+      title: msgTitle,
+      body: msgBody,
+      data: { taskId: task._id.toString() }
+    }));
+    await Notification.insertMany(notifications);
+
+    // Send Push Notifications via FCM
+    otherUsers.forEach(u => {
+      if (u.fcmToken) sendPushNotification(u.fcmToken, msgTitle, msgBody, { taskId: task._id.toString() });
+    });
 
     res.json({ task, progress });
   } catch (err) {
