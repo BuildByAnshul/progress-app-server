@@ -18,7 +18,7 @@ try {
   }
 
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
+    credential: admin.cert(serviceAccount)
   });
   console.log('✅ Firebase Admin initialized');
 } catch (error) {

@@ -8,7 +8,6 @@ const userRoutes = require('./routes/users');
 const taskRoutes = require('./routes/tasks');
 const statsRoutes = require('./routes/stats');
 const leaderboardRoutes = require('./routes/leaderboard');
-const pointsRoutes = require('./routes/points');
 const notificationRoutes = require('./routes/notifications');
 const { startDailyResetJob } = require('./jobs/dailyReset');
 require('./services/firebase'); // Initialize Firebase
