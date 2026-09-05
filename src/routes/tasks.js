@@ -1,7 +1,11 @@
 const express = require('express');
 const Task = require('../models/Task');
+const TaskTemplate = require('../models/TaskTemplate');
 const authMiddleware = require('../middleware/auth');
 const { awardTaskComplete, syncTasksTotal } = require('../points/engine');
+const Notification = require('../models/Notification');
+const { sendPushNotification } = require('../services/firebase');
+const User = require('../models/User');
 
 const router = express.Router();
 
@@ -32,36 +36,53 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Default tasks to seed daily
-const DEFAULT_TASKS = [
-  { title: 'Fitness', subtitle: 'Workout or physical activity', priority: 'High', durationEstimate: 60, isDefault: true },
-  { title: 'Personality', subtitle: 'Self reflection or grooming', priority: 'Medium', durationEstimate: 30, isDefault: true },
-  { title: 'Social Activities', subtitle: 'Connect with friends/family', priority: 'Medium', durationEstimate: 60, isDefault: true },
-  { title: 'Communication', subtitle: 'Improve speaking or writing', priority: 'Medium', durationEstimate: 45, isDefault: true },
-  { title: 'Learn new thing', subtitle: 'Read a book or take a course', priority: 'High', durationEstimate: 60, isDefault: true },
-];
-
 // GET /tasks/today
 router.get('/today', authMiddleware, async (req, res) => {
   try {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
-    // Check if default tasks exist for today
-    const existingDefaults = await Task.countDocuments({
-      userId: req.userId,
-      scheduledDate: dayRange(todayStr()),
-      isDefault: true,
+    // Get all relevant templates for today
+    // Rules: isGlobal = true OR userId = req.userId
+    // AND (duration = 'forever' OR duration = 'today' with startDate=today OR duration = 'days' with startDate <= today <= endDate)
+    const templates = await TaskTemplate.find({
+      $or: [{ isGlobal: true }, { userId: req.userId }],
     });
 
-    // Seed default daily tasks if they are missing
-    if (existingDefaults === 0) {
-      const defaultTasksToInsert = DEFAULT_TASKS.map((t) => ({
-        ...t,
+    const validTemplates = templates.filter(t => {
+      if (t.duration === 'forever') return true;
+      
+      const start = new Date(t.startDate);
+      start.setUTCHours(0, 0, 0, 0);
+      
+      if (t.duration === 'today') return start.getTime() === today.getTime();
+      if (t.duration === 'days') {
+        const end = new Date(t.endDate);
+        end.setUTCHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+      }
+      return false;
+    });
+
+    // For each valid template, check if a task is already instantiated for today
+    for (const t of validTemplates) {
+      const exists = await Task.findOne({
         userId: req.userId,
-        scheduledDate: today,
-      }));
-      await Task.insertMany(defaultTasksToInsert);
+        templateId: t._id,
+        scheduledDate: dayRange(todayStr()),
+      });
+
+      if (!exists) {
+        await Task.create({
+          userId: req.userId,
+          title: t.title,
+          subtitle: t.subtitle,
+          templateId: t._id,
+          scheduledDate: today,
+          isDefault: t.isGlobal, // marking global as default
+          subtasks: t.subtasks.map(st => ({ title: st.title })),
+        });
+      }
     }
 
     const tasks = await Task.find({
@@ -101,20 +122,38 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const {
-      title, subtitle, categoryIcon, priority, durationEstimate,
-      dueDate, scheduledDate, assignedAvatars, attachments,
+      title, subtitle, dueDate, scheduledDate, assignedAvatars, attachments,
       linkedUrl, subtasks, isBacklog,
+      visibility, duration, endDate // 'public'|'private', 'today'|'days'|'forever'
     } = req.body;
 
     if (!title) return res.status(400).json({ message: 'Title is required' });
 
+    const isGlobal = visibility === 'public';
+    const taskDuration = duration || 'today';
+    let templateId = null;
+
+    // If it's a recurring task or a global task, create a template
+    if (isGlobal || taskDuration !== 'today') {
+      const template = await TaskTemplate.create({
+        userId: isGlobal ? null : req.userId,
+        isGlobal,
+        title,
+        subtitle: subtitle || '',
+        duration: taskDuration,
+        startDate: scheduledDate ? new Date(scheduledDate) : new Date(),
+        endDate: endDate ? new Date(endDate) : undefined,
+        subtasks: subtasks || [],
+      });
+      templateId = template._id;
+    }
+
+    // Always instantiate it for today for the creator so they see it immediately
+    // If it's a future task, we skip creating for today, but for simplicity let's assume it's for today onwards.
     const task = await Task.create({
       userId: req.userId,
       title,
       subtitle: subtitle || '',
-      categoryIcon: categoryIcon || 'grid',
-      priority: priority || 'Medium',
-      durationEstimate: durationEstimate || 60,
       dueDate: dueDate ? new Date(dueDate) : undefined,
       scheduledDate: scheduledDate ? new Date(scheduledDate) : new Date(),
       assignedAvatars: assignedAvatars || [],
@@ -122,11 +161,11 @@ router.post('/', authMiddleware, async (req, res) => {
       linkedUrl: linkedUrl || '',
       subtasks: subtasks || [],
       isBacklog: isBacklog || false,
+      templateId: templateId,
+      isDefault: isGlobal,
     });
 
-    // Recalculate today's task total and check five-task bonus
     await syncTasksTotal(req.userId);
-
     res.status(201).json(task);
   } catch (err) {
     console.error('Create task error:', err);
@@ -143,8 +182,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
     const wasCompleted = task.isCompleted;
 
     const allowed = [
-      'title', 'subtitle', 'categoryIcon', 'priority', 'durationEstimate',
-      'dueDate', 'scheduledDate', 'assignedAvatars', 'attachments',
+      'title', 'subtitle', 'dueDate', 'scheduledDate', 'assignedAvatars', 'attachments',
       'linkedUrl', 'subtasks', 'isCompleted', 'isBacklog',
     ];
     allowed.forEach((field) => {
@@ -179,6 +217,28 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
 
     const progress = await awardTaskComplete(req.userId, task._id);
     await syncTasksTotal(req.userId);
+
+    // If it's a global task, notify others
+    if (task.isDefault) {
+      const currentUser = await User.findById(req.userId);
+      const otherUsers = await User.find({ _id: { $ne: req.userId } });
+      
+      const msgTitle = "Task Completed!";
+      const msgBody = `${currentUser.name} ne '${task.title}' task complete kar liya hai! 🎉`;
+      
+      const notifications = otherUsers.map(u => ({
+        userId: u._id,
+        title: msgTitle,
+        body: msgBody,
+        data: { taskId: task._id.toString() }
+      }));
+      await Notification.insertMany(notifications);
+
+      // Send Push Notifications via FCM
+      otherUsers.forEach(u => {
+        if (u.fcmToken) sendPushNotification(u.fcmToken, msgTitle, msgBody, { taskId: task._id.toString() });
+      });
+    }
 
     res.json({ task, progress });
   } catch (err) {
@@ -222,6 +282,12 @@ router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const task = await Task.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     if (!task) return res.status(404).json({ message: 'Task not found' });
+    
+    // If this task was tied to a template and the user owned it, delete the template too
+    if (task.templateId) {
+      await TaskTemplate.findOneAndDelete({ _id: task.templateId, userId: req.userId });
+    }
+
     await syncTasksTotal(req.userId);
     res.json({ message: 'Task deleted' });
   } catch (err) {

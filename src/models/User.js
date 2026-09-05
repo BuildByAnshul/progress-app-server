@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema(
     role: { type: String, default: 'Member' },
     seniority: { type: String, enum: ['Junior', 'Mid', 'Senior', 'Lead'], default: 'Mid' },
     totalPoints: { type: Number, default: 0 },
+    fcmToken: { type: String, default: '' },
   },
   { timestamps: true }
 );

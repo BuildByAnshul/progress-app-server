@@ -18,12 +18,13 @@ router.get('/me', authMiddleware, async (req, res) => {
 // PUT /users/me — update profile (name, role, seniority, avatar)
 router.put('/me', authMiddleware, async (req, res) => {
   try {
-    const { name, role, seniority, avatar } = req.body;
+    const { name, role, seniority, avatar, fcmToken } = req.body;
     const updates = {};
     if (name) updates.name = name;
     if (role) updates.role = role;
     if (seniority) updates.seniority = seniority;
     if (avatar !== undefined) updates.avatar = avatar;
+    if (fcmToken !== undefined) updates.fcmToken = fcmToken;
 
     const user = await User.findByIdAndUpdate(req.userId, updates, { new: true }).select(
       '-passwordHash'

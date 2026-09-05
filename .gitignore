@@ -3,6 +3,7 @@ node_modules/
 
 # Environment variables (NEVER commit these)
 .env
+firebase-adminsdk.json
 
 # Logs
 *.log
